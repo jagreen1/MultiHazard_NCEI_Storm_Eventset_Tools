@@ -840,7 +840,7 @@ def clean_ncei_storm_database(input_dir, output_dir, cpi_lookup_source, nws_zone
     
     # Save full dataset (1950-2024)
     print(f"\nSaving full dataset (1950-2024)...")
-    output_full = os.path.join(output_dir, "NCEI_Storm_Database_Cleaned_Details_1950-2024_v2.parquet")
+    output_full = os.path.join(output_dir, "NCEI_Storm_Database_Cleaned_Details_1950-2024.parquet")
     df.to_parquet(output_full, compression="gzip")
     print(f"Saved to {output_full}")
     
@@ -850,7 +850,7 @@ def clean_ncei_storm_database(input_dir, output_dir, cpi_lookup_source, nws_zone
     df_subset = df_subset.sort_values(["BEGIN_DATETIME_UTC", "CZ_FIPS"], ascending=[True, True])
     df_subset = df_subset.drop_duplicates()
     
-    output_subset = os.path.join(output_dir, "NCEI_Storm_Database_Cleaned_Details_1996-2024_v2.parquet")
+    output_subset = os.path.join(output_dir, "NCEI_Storm_Database_Cleaned_Details_1996-2024.parquet")
     df_subset.to_parquet(output_subset, compression="gzip")
     print(f"Saved to {output_subset}")
     
