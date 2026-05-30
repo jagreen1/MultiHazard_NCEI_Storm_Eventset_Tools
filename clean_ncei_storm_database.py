@@ -11,8 +11,7 @@ This module processes and standardizes storm event data from NOAA NCEI's Storm E
 applying data quality checks, standardization rules, timezone conversions, and inflation adjustments.
 
 Input data can be downloaded from:
-- https://www.ncdc.noaa.gov/stormevents/ftp.jsp
-- https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
+- http://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
 - ftp://ftp.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
 """
 
@@ -22,6 +21,11 @@ import os
 import numpy as np
 import pandas as pd
 import pytz
+from ftplib import FTP, all_errors as ftp_errors
+import urllib.request
+import urllib.error
+from pathlib import Path
+import re
 
 pd.set_option('display.max_columns', None)
 
@@ -221,6 +225,200 @@ OUTPUT_COLUMNS = [
     "END_LOCATION", "BEGIN_LAT", "BEGIN_LON", "END_LAT", "END_LON", "DATA_SOURCE",
     "EPISODE_NARRATIVE", "EVENT_NARRATIVE",
 ]
+
+
+# ============================================================================
+# DOWNLOAD FUNCTIONS
+# ============================================================================
+
+def download_from_http(url, output_dir, pattern="StormEvents_details-ftp_v1.0*.csv.gz"):
+    """
+    Download files matching pattern from HTTP URL using directory listing.
+    
+    Parameters
+    ----------
+    url : str
+        Base HTTP URL to the directory (e.g., 'http://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/')
+    output_dir : str
+        Local directory to save downloaded files
+    pattern : str
+        Regex pattern to match filenames (e.g., 'StormEvents_details-ftp_v1.0*.csv.gz')
+    
+    Returns
+    -------
+    int
+        Number of files downloaded
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Convert glob pattern to regex
+    regex_pattern = pattern.replace("*", ".*")
+    regex = re.compile(regex_pattern)
+    
+    try:
+        print(f"Fetching directory listing from {url}")
+        with urllib.request.urlopen(url) as response:
+            html = response.read().decode('utf-8')
+        
+        # Extract filenames from HTML links
+        filenames = re.findall(r'href=["\']([^"\']+\.csv\.gz)["\']', html)
+        matching_files = [f for f in filenames if regex.match(f)]
+        
+        if not matching_files:
+            print(f"No files matching pattern '{pattern}' found at {url}")
+            return 0
+        
+        print(f"Found {len(matching_files)} files matching pattern")
+        
+        downloaded_count = 0
+        for filename in matching_files:
+            file_url = url.rstrip('/') + '/' + filename
+            output_path = os.path.join(output_dir, filename)
+            
+            # Skip if already exists
+            if os.path.exists(output_path):
+                print(f"  ✓ {filename} (already exists)")
+                downloaded_count += 1
+                continue
+            
+            try:
+                print(f"  ⬇ Downloading {filename}...")
+                urllib.request.urlretrieve(file_url, output_path)
+                print(f"  ✓ {filename} downloaded successfully")
+                downloaded_count += 1
+            except urllib.error.URLError as e:
+                print(f"  ✗ Failed to download {filename}: {str(e)}")
+        
+        return downloaded_count
+    
+    except urllib.error.URLError as e:
+        raise ConnectionError(f"Failed to connect to {url}: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Error downloading from HTTP: {str(e)}")
+
+
+def download_from_ftp(server, output_dir, pattern="StormEvents_details-ftp_v1.0*.csv.gz"):
+    """
+    Download files matching pattern from FTP server.
+    
+    Parameters
+    ----------
+    server : str
+        FTP server address (e.g., 'ftp.ncei.noaa.gov')
+    output_dir : str
+        Local directory to save downloaded files
+    pattern : str
+        Glob pattern to match filenames (e.g., 'StormEvents_details-ftp_v1.0*.csv.gz')
+    
+    Returns
+    -------
+    int
+        Number of files downloaded
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Convert glob pattern to regex
+    regex_pattern = pattern.replace("*", ".*")
+    regex = re.compile(regex_pattern)
+    
+    try:
+        print(f"Connecting to FTP server {server}...")
+        ftp = FTP(server)
+        ftp.login()  # Anonymous login
+        ftp.cwd('pub/data/swdi/stormevents/csvfiles/')
+        
+        # List all files in directory
+        filenames = ftp.nlst()
+        matching_files = [f for f in filenames if regex.match(f) and f.endswith('.gz')]
+        
+        if not matching_files:
+            print(f"No files matching pattern '{pattern}' found on FTP server")
+            ftp.quit()
+            return 0
+        
+        print(f"Found {len(matching_files)} files matching pattern")
+        
+        downloaded_count = 0
+        for filename in matching_files:
+            output_path = os.path.join(output_dir, filename)
+            
+            # Skip if already exists
+            if os.path.exists(output_path):
+                print(f"  ✓ {filename} (already exists)")
+                downloaded_count += 1
+                continue
+            
+            try:
+                print(f"  ⬇ Downloading {filename}...")
+                with open(output_path, 'wb') as f:
+                    ftp.retrbinary(f'RETR {filename}', f.write)
+                print(f"  ✓ {filename} downloaded successfully")
+                downloaded_count += 1
+            except ftp_errors as e:
+                print(f"  ✗ Failed to download {filename}: {str(e)}")
+        
+        ftp.quit()
+        return downloaded_count
+    
+    except ftp_errors as e:
+        raise ConnectionError(f"Failed to connect to FTP server {server}: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Error downloading from FTP: {str(e)}")
+
+
+def download_ncei_storm_data(output_dir, method='http', skip_existing=True):
+    """
+    Download NCEI Storm Events Database CSV files.
+    
+    Parameters
+    ----------
+    output_dir : str
+        Local directory to save downloaded files. Created if it doesn't exist.
+    method : str, optional
+        Download method: 'http' or 'ftp' (default: 'http')
+    skip_existing : bool, optional
+        Skip files that already exist in output directory (default: True)
+    
+    Returns
+    -------
+    int
+        Number of files downloaded (or found if skip_existing=True)
+    
+    Examples
+    --------
+    >>> download_ncei_storm_data('C:/data/storm_events', method='http')
+    >>> download_ncei_storm_data('/home/data/storm_events', method='ftp')
+    """
+    
+    print(f"\n{'='*70}")
+    print(f"NCEI Storm Events Database Downloader")
+    print(f"{'='*70}")
+    print(f"Output directory: {output_dir}")
+    print(f"Download method: {method}")
+    print(f"Skip existing files: {skip_existing}")
+    print(f"{'='*70}\n")
+    
+    pattern = "StormEvents_details-ftp_v1.0*.csv.gz"
+    
+    try:
+        if method.lower() == 'http':
+            url = 'http://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/'
+            count = download_from_http(url, output_dir, pattern)
+        elif method.lower() == 'ftp':
+            server = 'ftp.ncei.noaa.gov'
+            count = download_from_ftp(server, output_dir, pattern)
+        else:
+            raise ValueError(f"Invalid method '{method}'. Use 'http' or 'ftp'.")
+        
+        print(f"\n{'='*70}")
+        print(f"Download complete: {count} files")
+        print(f"{'='*70}\n")
+        
+        return count
+    
+    except Exception as e:
+        print(f"\nDownload failed: {str(e)}")
+        raise
 
 
 # ============================================================================
@@ -470,16 +668,31 @@ def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024)
     Parameters
     ----------
     input_dir : str
-        Directory containing raw compressed storm event CSV files
+        Directory containing raw compressed storm event CSV files. 
+        Created if it doesn't exist.
     output_dir : str
         Directory for saving cleaned parquet output files
     inflation_target_year : int
         Year to normalize damage values to (default: 2024)
+    
+    Returns
+    -------
+    tuple of pd.DataFrame
+        (df_full, df_subset) where df_full is 1950-2024 data and df_subset is 1996-2024 data
+    
+    Examples
+    --------
+    >>> df_full, df_1996 = clean_ncei_storm_database(
+    ...     input_dir='C:/data/input',
+    ...     output_dir='C:/data/output',
+    ...     inflation_target_year=2024
+    ... )
     """
     
     print(f"Starting NCEI Storm Database cleaning pipeline at {datetime.now()}")
     
-    # Create output directory if needed
+    # Create directories if needed
+    os.makedirs(input_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
     
     # Load remote reference data
@@ -588,9 +801,15 @@ def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024)
 # ============================================================================
 
 if __name__ == "__main__":
-    # User-defined input/output directories
+    # User-defined directories and parameters
     INPUT_DIR = r"C:\path\to\input\directory"  # Replace with actual path
     OUTPUT_DIR = r"C:\path\to\output\directory"  # Replace with actual path
     INFLATION_YEAR = 2024
     
+    # STEP 1 (Optional): Download NCEI storm data
+    # Uncomment one of the following lines to download data before processing
+    # download_ncei_storm_data(INPUT_DIR, method='http')  # Download via HTTP
+    # download_ncei_storm_data(INPUT_DIR, method='ftp')   # Download via FTP
+    
+    # STEP 2: Clean and process the data
     df_full, df_1996 = clean_ncei_storm_database(INPUT_DIR, OUTPUT_DIR, INFLATION_YEAR)
