@@ -14,7 +14,7 @@ This script uses the cleaned NCEI Storm Database to create four output events se
 - (MH) Unique Multi-Hazard Events
 
 User defined parameters allow for customization of event sets 
-- event set duration (start/end year),
+- eventset duration (start/end year),
 - hazard type (list of hazard acronyms)
 - multi-hazard time lag (temporal overlap period in days)
 - minimum hazard impact filter thresholds (injury, death, building damage, and crop damage)
@@ -65,10 +65,10 @@ hazard_event_exclusion_filter = ["nl","mew","mtw","mhl","mfg","mtc","mltn"]
 # CHANGE THESE VALUES AS DESIRED FOR APPROPRIATE IMPACT FILTERING
 inj = 1 # injuries
 dth = 1 # deaths
-#c = 10  # crop damage in thousands
-#p = 10  # property damage in thousands
 c = 50  # crop damage in thousands
 p = 50  # property damage in thousands
+#c = 10  # crop damage in thousands
+#p = 10  # property damage in thousands
 
 ######################################################################################################
 
@@ -320,7 +320,7 @@ AE.to_parquet(
 pd.options.mode.chained_assignment = None  # default='warn'
 
 # Define empty dataframes that will store the single hazard and multi-hazard eventsets
-MH = pd.DataFrame()
+MHP = pd.DataFrame()
 SH = pd.DataFrame()
 
 # Define a list of the state fips codes
@@ -328,7 +328,7 @@ state_fips_list = AE["STATE_FIPS"].unique().tolist()
 state_fips_list.sort()
 
 # Record any counties that don't have any overlapping hazard events for the defined time lag
-#No_MH_County_df = pd.DataFrame()
+#No_MHP_County_df = pd.DataFrame()
 
 
 # Check if datetime ranges overlap with a time lag
@@ -646,7 +646,7 @@ for state_fips in tqdm(state_fips_list):
             )
 
             all_combined_pair_df = pd.concat([all_combined_pair_df,all_pair_df])
-            MH = pd.concat([MH, all_pair_df])
+            MHP = pd.concat([MHP, all_pair_df])
 
 
 
@@ -663,14 +663,14 @@ print(f'US County Polygon CRS: {us_county_polygons.geometry.crs}')
 SH_count_dict = {}
 SH_event_dict = {}
 
-MH_count_dict = {}
-MH_event_dict = {}
+MHP_count_dict = {}
+MHP_event_dict = {}
 
 no_hazard_boolean_dict = {}
 SH_boolean_dict = {}
-MH_boolean_dict = {}
+MHP_boolean_dict = {}
 no_hazard_or_SH_boolean_dict = {}
-SH_or_MH_boolean_dict = {}
+SH_or_MHP_boolean_dict = {}
 
 # Define list of states to iterate through
 state_list = us_county_polygons['STATEFP'].unique().tolist() 
@@ -681,30 +681,30 @@ for year in tqdm(year_range):
     #print(f'Year: {year}')
     # Define nested structure of dictionaries
     SH_count_dict[year] = {}
-    MH_count_dict[year] = {}
+    MHP_count_dict[year] = {}
     SH_event_dict[year] = {}
-    MH_event_dict[year] = {}
+    MHP_event_dict[year] = {}
     no_hazard_boolean_dict[year] = {}
     SH_boolean_dict[year] = {}
-    MH_boolean_dict[year] = {}
+    MHP_boolean_dict[year] = {}
     no_hazard_or_SH_boolean_dict[year] = {}
-    SH_or_MH_boolean_dict[year] = {}
+    SH_or_MHP_boolean_dict[year] = {}
     
     SH_sub = AE[(AE['start_year']==year) | (AE['end_year']==year)].reset_index(drop=True)
-    MH_sub = MH[(MH['start_year']==year) | (MH['end_year']==year)].reset_index(drop=True)
+    MHP_sub = MHP[(MHP['start_year']==year) | (MHP['end_year']==year)].reset_index(drop=True)
 
     for state in state_list:
         #print(f'State: {state}')
         # Define nested structure of dictionaries
         SH_count_dict[year][state] = {}
-        MH_count_dict[year][state] = {}
+        MHP_count_dict[year][state] = {}
         SH_event_dict[year][state] = {}
-        MH_event_dict[year][state] = {}
+        MHP_event_dict[year][state] = {}
         no_hazard_boolean_dict[year][state] = {}
         SH_boolean_dict[year][state] = {}
-        MH_boolean_dict[year][state] = {}
+        MHP_boolean_dict[year][state] = {}
         no_hazard_or_SH_boolean_dict[year][state] = {}
-        SH_or_MH_boolean_dict[year][state] = {}
+        SH_or_MHP_boolean_dict[year][state] = {}
         
         county_state_list = us_county_polygons.loc[us_county_polygons['STATEFP'] == state, ['GEOID','COUNTYFP','geometry']]
 
@@ -721,22 +721,22 @@ for year in tqdm(year_range):
             # # crop hazard data to relevant regions 
             # SH_sub_county = SH_sub.loc[np.sort(arr1)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
             # # multi spatial filter
-            # tree2 = shapely.STRtree(MH_sub.Geometry.values) # Make tree too see Geometry overlap
+            # tree2 = shapely.STRtree(MHP_sub.Geometry.values) # Make tree too see Geometry overlap
             # arr2 = np.transpose(tree2.query(county_geom, predicate='intersects'))  # Find intersecting hazards with the area of interest
             # # crop hazard data to relevant regions 
-            # MH_sub_county = MH_sub.loc[np.sort(arr2)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
+            # MHP_sub_county = MHP_sub.loc[np.sort(arr2)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
             ###############################################################
             
             # NON GEOMETRY SPATIAL FILTER APPROACH, FILTER VIA COUNTY GEOID
             ###############################################################
             SH_sub_county = SH_sub[SH_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
-            MH_sub_county = MH_sub[MH_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
+            MHP_sub_county = MHP_sub[MHP_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
             ###############################################################
 
             
             # Add single to dict
             # Check if there are matching single events in the multi event, this will be true if multi is true, then remove the multi events from the single before adding to dict
-            multi_events = set(MH_sub_county['EVENT_ID'].unique())
+            multi_events = set(MHP_sub_county['EVENT_ID'].unique())
             single_events = set(SH_sub_county['EVENT_ID'].unique())
             single_only_events = single_events.symmetric_difference(multi_events) #find the 'code' ids of events in only single
             
@@ -755,20 +755,20 @@ for year in tqdm(year_range):
                 SH_event_dict[year][state][county] = []
 
             # Add multi to dict
-            multi_duplicated_events = MH_sub_county["PAIR_ID"][MH_sub_county["PAIR_ID"].duplicated(keep=False)]
-            multi_filtered_df = MH_sub_county[MH_sub_county["PAIR_ID"].isin(multi_duplicated_events)]    
+            multi_duplicated_events = MHP_sub_county["PAIR_ID"][MHP_sub_county["PAIR_ID"].duplicated(keep=False)]
+            multi_filtered_df = MHP_sub_county[MHP_sub_county["PAIR_ID"].isin(multi_duplicated_events)]    
             # If multihazard, add the count of unique multihazard events to dict
-            # If len(MH_sub_county['code'].unique().tolist())>0:
+            # If len(MHP_sub_county['code'].unique().tolist())>0:
             if len(multi_filtered_df)>0:
-                MH_boolean_dict[year][state][county] = True
-                MH_count_dict[year][state][county] = len(multi_filtered_df['PAIR_ID'].unique())
-                MH_event_dict[year][state][county] = multi_filtered_df['PAIR_ID'].unique().tolist()
+                MHP_boolean_dict[year][state][county] = True
+                MHP_count_dict[year][state][county] = len(multi_filtered_df['PAIR_ID'].unique())
+                MHP_event_dict[year][state][county] = multi_filtered_df['PAIR_ID'].unique().tolist()
                 #OR could add the 'code' id of the single hazard events that make up a multihazard
-                #MH_event_dict[year][state][county] = {multi_filtered_df['code'].unique().tolist()}
+                #MHP_event_dict[year][state][county] = {multi_filtered_df['code'].unique().tolist()}
             else:
-                MH_boolean_dict[year][state][county] = False
-                MH_count_dict[year][state][county] = 0
-                MH_event_dict[year][state][county] = []
+                MHP_boolean_dict[year][state][county] = False
+                MHP_count_dict[year][state][county] = 0
+                MHP_event_dict[year][state][county] = []
             
             # Add no hazard to dict
             if ((len(SH_only_sub_county)==0) & (len(multi_filtered_df)==0)):
@@ -784,9 +784,9 @@ for year in tqdm(year_range):
 
             # Add single hazard or multi-hazard (i.e. inverse of no hazard) to dict
             if ((len(SH_only_sub_county)>0) | (len(multi_filtered_df)>0)):
-                SH_or_MH_boolean_dict[year][state][county] = True
+                SH_or_MHP_boolean_dict[year][state][county] = True
             else:
-                SH_or_MH_boolean_dict[year][state][county] = False
+                SH_or_MHP_boolean_dict[year][state][county] = False
 
 
 #Save final dictionaries as pickle
@@ -794,11 +794,11 @@ for year in tqdm(year_range):
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_only_event_dict.pkl', 'wb') as file:
     pickle.dump(SH_event_dict, file)
 
-with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MH_event_dict.pkl', 'wb') as file:
-    pickle.dump(MH_event_dict, file)
+with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MHP_event_dict.pkl', 'wb') as file:
+    pickle.dump(MHP_event_dict, file)
 
-with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MH_count_dict.pkl', 'wb') as file:
-    pickle.dump(MH_count_dict, file)
+with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MHP_count_dict.pkl', 'wb') as file:
+    pickle.dump(MHP_count_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_count_dict.pkl', 'wb') as file:
     pickle.dump(SH_count_dict, file)
@@ -809,14 +809,14 @@ with open(Hazard_Dict_Output_Path+f'\\NCEI_County_NH_boolean_dict.pkl', 'wb') as
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_boolean_dict.pkl', 'wb') as file:
     pickle.dump(SH_boolean_dict, file)
 
-with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MH_boolean_dict.pkl', 'wb') as file:
-    pickle.dump(MH_boolean_dict, file)
+with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MHP_boolean_dict.pkl', 'wb') as file:
+    pickle.dump(MHP_boolean_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_NH_boolean_dict.pkl', 'wb') as file:
     pickle.dump(no_hazard_or_SH_boolean_dict, file)
 
-with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_MH_boolean_dict.pkl', 'wb') as file:
-    pickle.dump(SH_or_MH_boolean_dict, file)
+with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_MHP_boolean_dict.pkl', 'wb') as file:
+    pickle.dump(SH_or_MHP_boolean_dict, file)
 
 print("All hazard dicts saved as pickle")
 
@@ -845,25 +845,25 @@ SH.to_parquet(
     compression="gzip",
 )
 
-MH = MH.reset_index(drop=True)
+MHP = MHP.reset_index(drop=True)
+
+MHP.to_parquet(
+    rf"{Hazard_Eventset_Output_Path}/MHP_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
+    compression="gzip",
+)
+
+MH = MHP.drop_duplicates(subset='EVENT_ID', keep='first', ignore_index=True, inplace=False).reset_index(drop=True)
 
 MH.to_parquet(
     rf"{Hazard_Eventset_Output_Path}/MH_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
     compression="gzip",
 )
 
-MH_unique = MH.drop_duplicates(subset='EVENT_ID', keep='first', ignore_index=True, inplace=False).reset_index(drop=True)
-
-MH_unique.to_parquet(
-    rf"{Hazard_Eventset_Output_Path}/MH_unique_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
-    compression="gzip",
-)
-
 event_set_count_outputs = [
     f"Total Number of Hazard Events: {len(AE)}",
     f"Number of Single-Hazard Only Events (SH): {len(SH)}",
-    f"Number of Multi-Hazard Pairs (MHP): {int(len(MH)/2)}",
-    f"Number of Unique Multi-Hazard Events (MH): {len(MH_unique)}",
+    f"Number of Multi-Hazard Pairs (MHP): {int(len(MHP)/2)}",
+    f"Number of Unique Multi-Hazard Events (MH): {len(MH)}",
 ]
 
 event_set_count_output_txt_path = rf"{Hazard_Eventset_Output_Path}/eventset_counts_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.txt"
@@ -877,6 +877,6 @@ print(f"Counts saved to: {event_set_count_output_txt_path}")
 
 print(f'Total Number of Hazard Events (AE): {len(AE)}')
 print(f'Number of Single-Hazard Only Events (SH):{len(SH)}')
-print(f'Number of Multi-Hazard Pairs (MHP):{int(len(MH)/2)}')
+print(f'Number of Multi-Hazard Pairs (MHP):{int(len(MHP)/2)}')
 print(f'Number of Unique Multi-Hazard Events (MH):{len(MH.drop_duplicates(subset='EVENT_ID'))}')
 
