@@ -1,12 +1,24 @@
 #######################
 """
-Updated Nov, 2025
-
+Created 2025
 @author: Joshua Green - University of Southampton
 
-Please cite this script/dataset if used in any research or publications.
+Please cite this script/dataset if used in any publications:
 
 Green, J. (2025) NCEI Storm Multihazard Eventset.
+
+This script uses the cleaned NCEI Storm Database to create four output events sets
+- (AE) All Hazard Events
+- (SH) Single-Hazard Only Events
+- (MHP) Multi-Hazard Event Pairs
+- (MH) Unique Multi-Hazard Events
+
+User defined parameters allow for customization of event sets 
+- event set duration (start/end year),
+- hazard type (list of hazard acronyms)
+- multi-hazard time lag (temporal overlap period in days)
+- minimum hazard impact filter thresholds (injury, death, building damage, and crop damage)
+
 """
 #######################
 
@@ -24,10 +36,10 @@ import pickle
 ######################################################################################################
 #                        USER DEFINED PARAMETERS
 ######################################################################################################
-Cleaned_NCEI_Storm_Database_Parquet_Path = 'PATH TO CLEANED DATABASE PARQUET FILE'
-Hazard_Eventset_Output_Path = 'PATH FOR OUTPUT FILES'
-US_County_Shapefile_Path = 'PATH TO US CENSUS BUREAU COUNTY SHAPEFILE'
-US_County_Shapefile_Path = 'https://github.com/jagreen1/NCEI_Storm_Multihazard_Eventset/raw/refs/heads/main/cb_2018_us_county_500k.shp'
+Cleaned_NCEI_Storm_Database_Parquet_Path = r"C:\Users\jg2n22\OneDrive - University of Southampton\Data\Hazards_Disasters\NCEI_Storm_Database_Cleaned\NCEI_Storm_Database_Cleaned_Details_1996-2024_v2.parquet"
+#Hazard_Eventset_Output_Path = r"C:\Users\jg2n22\OneDrive - University of Southampton\Data\Hazards_Disasters\Updated_NCEI_Eventsets_v3"
+Hazard_Eventset_Output_Path = r'C:\test_mh_output'
+US_County_Shapefile_Path = r'C:\Users\jg2n22\OneDrive - University of Southampton\Data\Admin_Bounds\CONUS_cb_2018_us_county_500k\CONUS_cb_2018_us_county_500k_WGS84.shp'
 
 # Define temporal year range
 # CHANGE THESE VALUES AS DESIRED FOR TEMPORAL COVERAGE
@@ -35,30 +47,32 @@ start_year = 1996
 end_year = 2024
 year_range = range(start_year, end_year+2, 1)
 
+
 # Define time lag in days
 # CHANGE THESE VALUES AS DESIRED FOR APPROPRIATE TEMPORAL OVERLAP
 #time_lag_days = 90
-time_lag_days = 30
+#time_lag_days = 30
+time_lag_days = 10
 time_lag = pd.Timedelta(days=time_lag_days)
 time_lag_int = time_lag.days
 
 # Define which hazard event types to include in the database, see lookup table in comments below
-# CHANGE THESE VALUES AS DESIRED FOR HAZARD/PERIL TYPE
-#hazard_event_inclusion_filter = [ "av", "bz", "cfl", "cfl", "cw", "cw", "dd", "df", "dr", "ds", "ew", "ew", "ew", "fc", "ff", "ffg", "fg", "fl", "hl", "hs", "ht", "ht", "hw", "hw", "is", "les", "ls", "lt", "ltn", "mew", "mew", "mfg", "mhl", "mht", "mltn", "mtc", "mtps", "mtw", "nl", "p", "pfl", "rc", "se", "sl", "sm", "sn", "sst", "swv", "tc", "tc", "tn", "ts", "tw", "vo", "wf", "wp", "ws", "ww"]
-hazard_event_inclusion_filter = ["av","bz","cfl","cw","df","dr","ds","ew","ff","fl","hl","ht","hw","is","les","ls","lt","ltn","p","pfl","se","sm","sn","sst","tc","tn","ts","tw","vo","wf","ws","ww"]
-hazard_event_exclusion_filter = ["wp","fg","hs","fc","rc","dd","ffg","sl","nl","swv","mew","mtw","mhl","mht","mfg","mtc","mltn"]
+# CHANGE THESE VALUES AS DESIRED FOR HAZARD/PERIL TYPE    
+hazard_event_inclusion_filter = ["av","bz","cfl","cw","df","dr","ds","ew","fc","ff","fg","fl","hl","hs","hw","is","lt","ltn","rn","pfl","rc","se","sl","sm","sn","sst","swv","tc","tn","ts","tw","vo","wf","wp","ws","ww"]
+hazard_event_exclusion_filter = ["nl","mew","mtw","mhl","mfg","mtc","mltn"]
 
 # Impact filter thresholds, minimum values for including in final event set
 # CHANGE THESE VALUES AS DESIRED FOR APPROPRIATE IMPACT FILTERING
 inj = 1 # injuries
 dth = 1 # deaths
-c = 10  # crop damage in thousands
-p = 10  # property damage in thousands
+#c = 10  # crop damage in thousands
+#p = 10  # property damage in thousands
+c = 50  # crop damage in thousands
+p = 50  # property damage in thousands
 
 ######################################################################################################
-#                        MAIN SCRIPT
-######################################################################################################
-Hazard_Dict_Output_Path = rf'{Hazard_Eventset_Output_Path}\\Eventset_Dicts_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_days}_{start_year}-{end_year}'
+
+Hazard_Dict_Output_Path = rf'{Hazard_Eventset_Output_Path}\Eventset_Dicts_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_days}_{start_year}-{end_year}'
 
 
 def create_folder_if_not_exists(folder_path):
@@ -73,120 +87,108 @@ create_folder_if_not_exists(Hazard_Dict_Output_Path)
 
 # Load the cleaned NCEI storm database
 raw_df = pd.read_parquet(Cleaned_NCEI_Storm_Database_Parquet_Path)
-# df['BEGIN_DATETIME'] = pd.to_datetime(df['BEGIN_DATETIME'])
-# df['END_DATETIME'] = pd.to_datetime(df['END_DATETIME'])
-dfevents = raw_df
+AE = raw_df
 
-dfevents["CZ_FIPS"] = dfevents["CZ_FIPS"].astype(str).str.zfill(3)
-dfevents["STATE_FIPS"] = dfevents["STATE_FIPS"].astype(str).str.zfill(2)
-dfevents["GEOID"] = dfevents["STATE_FIPS"].astype(str).str.zfill(2) + dfevents[
+AE["CZ_FIPS"] = AE["CZ_FIPS"].astype(str).str.zfill(3)
+AE["STATE_FIPS"] = AE["STATE_FIPS"].astype(str).str.zfill(2)
+AE["GEOID"] = AE["STATE_FIPS"].astype(str).str.zfill(2) + AE[
     "CZ_FIPS"
 ].astype(str).str.zfill(3)
 
 
 # General qa/qc. Problems should have been removed during database cleaning, however complete additional final check.
-dfevents = dfevents[~dfevents["EPISODE_ID"].isnull().isna()]
-dfevents = dfevents[~dfevents["EVENT_ID"].isnull().isna()]
-dfevents = dfevents[~dfevents["STATE"].isnull().isna()]
-dfevents = dfevents[~dfevents["STATE_FIPS"].isnull().isna()]
-dfevents = dfevents[~dfevents["EVENT_TYPE"].isnull().isna()]
-dfevents = dfevents[~dfevents["CZ_FIPS"].isnull().isna()]
-dfevents = dfevents[~dfevents["BEGIN_DATETIME"].isnull().isna()]
-dfevents = dfevents[~dfevents["END_DATETIME"].isnull().isna()]
+#AE = AE[~AE["EPISODE_ID"].isnull()]
+AE = AE[~AE["EVENT_ID"].isnull()]
+AE = AE[~AE["STATE"].isnull()]
+AE = AE[~AE["STATE_FIPS"].isnull()]
+AE = AE[~AE["EVENT_TYPE"].isnull()]
+AE = AE[~AE["CZ_FIPS"].isnull()]
+AE = AE[~AE["BEGIN_DATETIME_UTC"].isnull()]
+AE = AE[~AE["END_DATETIME_UTC"].isnull()]
+AE = AE[~AE["BEGIN_DATETIME"].isnull()]
+AE = AE[~AE["END_DATETIME"].isnull()]
 
 # Uncomment to remove these descriptive columns if desired
-# dfevents = dfevents.drop(columns=['EPISODE_NARRATIVE', 'EVENT_NARRATIVE'])
+# AE = AE.drop(columns=['EPISODE_NARRATIVE', 'EVENT_NARRATIVE'])
 
-# Define which hazard event types to include in the single/multi-hazard database
-# "av":Avalanche,
-# "bz":Blizzard,
-# "cfl":Coastal Flood,
-# "cw":Cold/Wind Chill,
-# "dd":Dust Devil,
-# "df":Debris Flow,
-# "dr":Drought,
-# "ds":Dust Storm,
-# "ew":Extreme Wind,
-# "fc":Funnel Cloud,
-# "ff":Frost/Freeze,
-# "ffg":Freezing Fog,
-# "fg":Fog,
-# "fl":Flood,
-# "hl":Hail,
-# "hs":High Surf,
-# "ht":Hurricane/Typhoon,
-# "hw":Heat,
-# "is":Ice Storm,
-# "les":Lake-Effect Snow,
-# "ls":Landslide,
-# "lt":Astronomical Low Tide,
-# "ltn":Lightning,
-# "mew":Marine Extreme Wind,
-# "mfg":Marine Fog,
-# "mhl":Marine Hail,
-# "mht":Marine Hurricane/Typhoon,
-# "mltn":Marine Lightning
-# "mtc":Marine Tropical Storm/Depression,
-# "mtw":Marine Thunderstorm Wind,
-# "nl":Northern Lights,
-# "p":Heavy Rain,
-# "pfl":Rain Flood,
-# "rc":Rip Current,
-# "se":Seiche,
-# "sl":Sleet,
-# "sm":Dense Smoke,
-# "sn":Snow,
-# "sst":Storm Surge/Tide,
-# "swv":Sneakerwave,
-# "tc":Tropical Storm,
-# "tn":Tornado,
-# "ts":Tsunami,
-# "tw":Thunderstorm Wind,
-# "vo":Volcanic Ash,
-# "wf":Wildfire,
-# "wp":Waterspout,
-# "ws":Winter Storm,
-# "ww":Winter Weather,
-
-
-# Define which events to include in the database
-#hazard_event_inclusion_filter = [ "av", "bz", "cfl", "cfl", "cw", "cw", "dd", "df", "dr", "ds", "ew", "ew", "ew", "fc", "ff", "ffg", "fg", "fl", "hl", "hs", "ht", "ht", "hw", "hw", "is", "les", "ls", "lt", "ltn", "mew", "mew", "mfg", "mhl", "mht", "mltn", "mtc", "mtps", "mtw", "nl", "p", "pfl", "rc", "se", "sl", "sm", "sn", "sst", "swv", "tc", "tc", "tn", "ts", "tw", "vo", "wf", "wp", "ws", "ww"]
+# Define which hazard event types to include in the single/multi-hazard event sets
+# "av":"Avalanche"
+# "bz":"Blizzard"
+# "cfl":"Coastal Flood"
+# "cw":"Cold/Wind Chill"
+# "df":"Debris Flow"
+# "dr":"Drought"
+# "ds":"Dust Storm"
+# "ew":"Extreme Wind"
+# "fc":"Funnel Cloud"
+# "ff":"Frost/Freeze"
+# "fg":"Fog"
+# "fl":"Flood"
+# "hl":"Hail"
+# "hs":"High Surf"
+# "hw":"Heat"
+# "is":"Ice Storm"
+# "lt":"Astronomical Low Tide"
+# "ltn":"Lightning"
+# "mew":"Marine Extreme Wind"
+# "mfg":"Marine Fog"
+# "mhl":"Marine Hail"
+# "mht":"Marine Tropical Cyclone"
+# "mltn":"Marine Lightning"
+# "mtw":"Marine Thunderstorm Wind"
+# "nl":"Northern Lights"
+# "rn":"Rain"
+# "pfl":"Flash Flood"
+# "rc":"Rip Current"
+# "se":"Seiche"
+# "sl":"Sleet"
+# "sm":"Smoke"
+# "sn":"Snow"
+# "sst":"Storm Surge/Tide"
+# "swv":"Sneakerwave"
+# "tc":"Tropical Cyclone"
+# "tn":"Tornado"
+# "ts":"Tsunami"
+# "tw":"Thunderstorm Wind"
+# "vo":"Volcanic Ash"
+# "wf":"Wildfire"
+# "wp":"Waterspout"
+# "ws":"Winter Storm"
+# "ww":"Winter Weather"
 
 # Subset database to only desired event types
-dfevents = dfevents[dfevents['HAZARD'].isin(hazard_event_inclusion_filter)]
+AE = AE[AE['HAZARD'].isin(hazard_event_inclusion_filter)]
 
 
 # General qa/qc and preprocessing
-dfevents['DEATHS_DIRECT'] = dfevents['DEATHS_DIRECT'].fillna(0).astype(int)
-dfevents['DEATHS_INDIRECT'] = dfevents['DEATHS_INDIRECT'].fillna(0).astype(int)
-dfevents['INJURIES_DIRECT'] = dfevents['INJURIES_DIRECT'].fillna(0).astype(int)
-dfevents['INJURIES_DIRECT'] = dfevents['INJURIES_DIRECT'].fillna(0).astype(int)
-dfevents["DAMAGE_CROPS"] = dfevents["DAMAGE_CROPS"].fillna(0).astype(int)
-dfevents["DAMAGE_PROPERTY"] = dfevents["DAMAGE_PROPERTY"].fillna(0).astype(int)
-dfevents['ADJ_DAMAGE_CROPS'] = dfevents['ADJ_DAMAGE_CROPS'].fillna(0).astype(int)
-dfevents['ADJ_DAMAGE_PROPERTY'] = dfevents['ADJ_DAMAGE_PROPERTY'].fillna(0).astype(int)
-dfevents['TOTAL_INJURIES'] = dfevents['TOTAL_INJURIES'].fillna(0)
-dfevents['TOTAL_DEATHS'] = dfevents['TOTAL_DEATHS'].fillna(0)
-dfevents['TOTAL_ADJ_DAMAGE'] = dfevents['TOTAL_ADJ_DAMAGE'].fillna(0)
+AE['DEATHS_DIRECT'] = AE['DEATHS_DIRECT'].fillna(0).astype(int)
+AE['DEATHS_INDIRECT'] = AE['DEATHS_INDIRECT'].fillna(0).astype(int)
+AE['INJURIES_DIRECT'] = AE['INJURIES_DIRECT'].fillna(0).astype(int)
+AE['INJURIES_DIRECT'] = AE['INJURIES_DIRECT'].fillna(0).astype(int)
+AE["DAMAGE_CROPS"] = AE["DAMAGE_CROPS"].fillna(0).astype(int)
+AE["DAMAGE_PROPERTY"] = AE["DAMAGE_PROPERTY"].fillna(0).astype(int)
+AE['ADJ_DAMAGE_CROPS'] = AE['ADJ_DAMAGE_CROPS'].fillna(0).astype(int)
+AE['ADJ_DAMAGE_PROPERTY'] = AE['ADJ_DAMAGE_PROPERTY'].fillna(0).astype(int)
+AE['TOTAL_INJURIES'] = AE['TOTAL_INJURIES'].fillna(0)
+AE['TOTAL_DEATHS'] = AE['TOTAL_DEATHS'].fillna(0)
+AE['TOTAL_ADJ_DAMAGE'] = AE['TOTAL_ADJ_DAMAGE'].fillna(0)
 
-dfevents.loc[dfevents['DEATHS_DIRECT']<0, 'DEATHS_DIRECT'] = 0
-dfevents.loc[dfevents['DEATHS_INDIRECT']<0, 'DEATHS_INDIRECT'] = 0
-dfevents.loc[dfevents['INJURIES_DIRECT']<0, 'INJURIES_DIRECT'] = 0
-dfevents.loc[dfevents['INJURIES_DIRECT']<0, 'INJURIES_DIRECT'] = 0
-dfevents.loc[dfevents['DAMAGE_CROPS']<0, 'DAMAGE_CROPS'] = 0
-dfevents.loc[dfevents['DAMAGE_PROPERTY']<0, 'DAMAGE_PROPERTY'] = 0
-dfevents.loc[dfevents['ADJ_DAMAGE_CROPS']<0, 'ADJ_DAMAGE_CROPS'] = 0
-dfevents.loc[dfevents['ADJ_DAMAGE_PROPERTY']<0, 'ADJ_DAMAGE_PROPERTY'] = 0
-dfevents.loc[dfevents['TOTAL_INJURIES']<0, 'TOTAL_INJURIES'] = 0
-dfevents.loc[dfevents['TOTAL_DEATHS']<0, 'TOTAL_DEATHS'] = 0
-dfevents.loc[dfevents['TOTAL_ADJ_DAMAGE']<0, 'TOTAL_ADJ_DAMAGE'] = 0
+AE.loc[AE['DEATHS_DIRECT']<0, 'DEATHS_DIRECT'] = 0
+AE.loc[AE['DEATHS_INDIRECT']<0, 'DEATHS_INDIRECT'] = 0
+AE.loc[AE['INJURIES_DIRECT']<0, 'INJURIES_DIRECT'] = 0
+AE.loc[AE['INJURIES_DIRECT']<0, 'INJURIES_DIRECT'] = 0
+AE.loc[AE['DAMAGE_CROPS']<0, 'DAMAGE_CROPS'] = 0
+AE.loc[AE['DAMAGE_PROPERTY']<0, 'DAMAGE_PROPERTY'] = 0
+AE.loc[AE['ADJ_DAMAGE_CROPS']<0, 'ADJ_DAMAGE_CROPS'] = 0
+AE.loc[AE['ADJ_DAMAGE_PROPERTY']<0, 'ADJ_DAMAGE_PROPERTY'] = 0
+AE.loc[AE['TOTAL_INJURIES']<0, 'TOTAL_INJURIES'] = 0
+AE.loc[AE['TOTAL_DEATHS']<0, 'TOTAL_DEATHS'] = 0
+AE.loc[AE['TOTAL_ADJ_DAMAGE']<0, 'TOTAL_ADJ_DAMAGE'] = 0
 
-dfevents = dfevents.drop_duplicates()
+AE = AE.drop_duplicates()
 
-# dfevents['start_year'] = dfevents['BEGIN_DATETIME'].dt.year
-# dfevents['end_year'] = dfevents['END_DATETIME'].dt.year
 
-dfevents = dfevents.reindex(
+AE = AE.reindex(
     columns=[
         "EPISODE_ID",
         "EVENT_ID",
@@ -198,6 +200,8 @@ dfevents = dfevents.reindex(
         "CZ_TYPE",
         "CZ_FIPS",
         "CZ_NAME",
+        "BEGIN_DATETIME_UTC",
+        "END_DATETIME_UTC",
         "BEGIN_DATETIME",
         "END_DATETIME",
         "start_year",
@@ -244,10 +248,16 @@ dfevents = dfevents.reindex(
 )
 
 # temporal filter
-dfevents = dfevents[
-    (dfevents["BEGIN_DATETIME"].dt.year >= start_year)
-    & (dfevents["END_DATETIME"].dt.year <= end_year)
+# Make sure using desired datetime, use UTC for standardized comparison, otherwise might be comparing two datetimes with different timezones
+AE = AE[
+    (AE["BEGIN_DATETIME_UTC"].dt.year >= start_year)
+    & (AE["END_DATETIME_UTC"].dt.year <= end_year)
+    # (AE["BEGIN_DATETIME"].dt.year >= start_year)
+    # & (AE["END_DATETIME"].dt.year <= end_year)
+    
 ]
+
+
 
 # Remove unwanted state classes
 # CHANGE THE EXCLUSED STATES AS DESIRED
@@ -274,35 +284,35 @@ Exclusion_State_List = [
     "ST LAWRENCE R",
     "VIRGIN ISLANDS",
 ]
-dfevents = dfevents[~dfevents["STATE"].isin(Exclusion_State_List)]
+AE = AE[~AE["STATE"].isin(Exclusion_State_List)]
 
 
 #remove marine zone only events, this should have been done as a byproduct of the above step, however this check is implemented as a backup
-dfevents = dfevents[(dfevents['CZ_TYPE']!='M')]
+AE = AE[(AE['CZ_TYPE']!='M')]
 
 
 # Filter by event impact
 # Modify below to filter by 'ALL_INJURIES','ALL_DEATHS','TOTAL_ADJ_DAMAGE' if desired
-dfevents = dfevents[
+AE = AE[
     (
-        (dfevents["INJURIES_DIRECT"] >= inj)
-        | (dfevents["INJURIES_INDIRECT"] >= inj)
-        | (dfevents["DEATHS_DIRECT"] >= dth)
-        | (dfevents["DEATHS_INDIRECT"] >= dth)
-        | (dfevents["ADJ_DAMAGE_CROPS"] >= c * 1000)
-        | (dfevents["ADJ_DAMAGE_PROPERTY"] >= p * 1000)
+        (AE["INJURIES_DIRECT"] >= inj)
+        | (AE["INJURIES_INDIRECT"] >= inj)
+        | (AE["DEATHS_DIRECT"] >= dth)
+        | (AE["DEATHS_INDIRECT"] >= dth)
+        | (AE["ADJ_DAMAGE_CROPS"] >= c * 1000)
+        | (AE["ADJ_DAMAGE_PROPERTY"] >= p * 1000)
     )
 ]
 
 # save prepared singledf, as a csv and/or parquet
-# dfevents.to_csv(
-#     rf"{Hazard_Eventset_Output_Path}\dfevents_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.csv.gz",
+# AE.to_csv(
+#     rf"{Hazard_Eventset_Output_Path}\AE_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.csv.gz",
 #     compression="gzip",
 #     encoding="utf-8",
 #     index=False,
 # )
-dfevents.to_parquet(
-    rf"{Hazard_Eventset_Output_Path}\dfevents_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
+AE.to_parquet(
+    rf"{Hazard_Eventset_Output_Path}\AE_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
     compression="gzip",
 )
 
@@ -310,15 +320,15 @@ dfevents.to_parquet(
 pd.options.mode.chained_assignment = None  # default='warn'
 
 # Define empty dataframes that will store the single hazard and multi-hazard eventsets
-dfmulti = pd.DataFrame()
-dfsingle = pd.DataFrame()
+MH = pd.DataFrame()
+SH = pd.DataFrame()
 
 # Define a list of the state fips codes
-state_fips_list = dfevents["STATE_FIPS"].unique().tolist()
+state_fips_list = AE["STATE_FIPS"].unique().tolist()
 state_fips_list.sort()
 
 # Record any counties that don't have any overlapping hazard events for the defined time lag
-#No_Multihazard_County_df = pd.DataFrame()
+#No_MH_County_df = pd.DataFrame()
 
 
 # Check if datetime ranges overlap with a time lag
@@ -396,12 +406,13 @@ for state_fips in tqdm(state_fips_list):
     
     all_combined_pair_df = pd.DataFrame()
     
-    print(f"state_fips:{state_fips}")
-    state_df = dfevents[dfevents["STATE_FIPS"] == state_fips]
+    #print(f"state_fips:{state_fips}")
+    state_df = AE[AE["STATE_FIPS"] == state_fips]
     county_fips_list = sorted(state_df["CZ_FIPS"].unique().tolist())
 
-    for county_fips in tqdm(county_fips_list):
-        print(f"state_fips:{state_fips}, county_fips:{county_fips}")
+    #for county_fips in tqdm(county_fips_list):
+    for county_fips in county_fips_list:
+        #print(f"state_fips:{state_fips}, county_fips:{county_fips}")
 
         df = state_df[state_df["CZ_FIPS"] == county_fips]
 
@@ -465,8 +476,8 @@ for state_fips in tqdm(state_fips_list):
 
                 # Check if there are temporally overlapping events, if false skip iteration
                 if not datetime_ranges_overlap_with_lag(
-                        row["BEGIN_DATETIME"], row["END_DATETIME"],
-                        other["BEGIN_DATETIME"], other["END_DATETIME"],
+                        row["BEGIN_DATETIME_UTC"], row["END_DATETIME_UTC"],
+                        other["BEGIN_DATETIME_UTC"], other["END_DATETIME_UTC"],
                         time_lag):
                     continue
 
@@ -518,9 +529,7 @@ for state_fips in tqdm(state_fips_list):
                 # pair_df_1 = pair_df_1.drop_duplicates() #remove any duplicates, there should only be 1 unique df row here
                 # print(len(pair_df_1))
 
-                pair_df_2 = df[df["EVENT_ID"] == overlapping_event_pairs_unique[i][1]][
-                    0:1
-                ]
+                pair_df_2 = df[df["EVENT_ID"] == overlapping_event_pairs_unique[i][1]][0:1]
                 pair_df_2["BEGIN_LAT"] = pair_df_2["BEGIN_LAT"].round(2)
                 pair_df_2["BEGIN_LON"] = pair_df_2["BEGIN_LON"].round(2)
                 pair_df_2["END_LAT"] = pair_df_2["END_LAT"].round(2)
@@ -588,6 +597,8 @@ for state_fips in tqdm(state_fips_list):
                     "CZ_TYPE",
                     "CZ_FIPS",
                     "CZ_NAME",
+                    "BEGIN_DATETIME_UTC",
+                    "END_DATETIME_UTC",
                     "BEGIN_DATETIME",
                     "END_DATETIME",
                     "start_year",
@@ -634,91 +645,9 @@ for state_fips in tqdm(state_fips_list):
                 ]
             )
 
-            # input_df = input_df.reset_index(drop=True)
-            # combined_df = input_df.groupby('PAIR_ID')
-
-            # Group by 'Group' and aggregate
-            # combined_df = input_df.groupby('PAIR_ID').agg(lambda x: x).reset_index()
-            # combined_df = input_df.groupby('PAIR_ID',as_index=False).agg({
-            #     'EPISODE_ID': combine_values_comma,
-            #     'OVERLAPPING_EVENTS': combine_values_slash,
-            #     'EVENT_ID': combine_values_comma,
-            #'STATE': check_combine_values_comma,
-            #     'STATE_FIPS': check_combine_values_comma,
-            #     'EVENT_TYPE': combine_values_comma,
-            #     'CZ_TYPE': check_combine_values_comma,
-            #     'CZ_FIPS': check_combine_values_comma,
-            #     'CZ_NAME': check_combine_values_comma,
-            #     'WFO': combine_values_comma,
-            #     'BEGIN_DATETIME': combine_values_comma,
-            #     'END_DATETIME': combine_values_comma,
-            #     'INJURIES_DIRECT': combine_values_comma,
-            #     'MULTI_INJURIES_DIRECT': check_combine_values_comma,
-            #     'INJURIES_INDIRECT': combine_values_comma,
-            #     'MULTI_INJURIES_INDIRECT': check_combine_values_comma,
-            #     'DEATHS_DIRECT': combine_values_comma,
-            #     'MULTI_DEATHS_DIRECT': check_combine_values_comma,
-            #     'DEATHS_INDIRECT': combine_values_comma,
-            #     'MULTI_DEATHS_INDIRECT': check_combine_values_comma,
-            #     'DAMAGE_PROPERTY': combine_values_comma,
-            #     'MULTI_DAMAGE_PROPERTY': check_combine_values_comma,
-            #     'DAMAGE_CROPS': combine_values_comma,
-            #     'MULTI_DAMAGE_CROPS': check_combine_values_comma,
-            #     'SOURCE': check_combine_values_comma,
-            #     'MAGNITUDE': combine_values_comma,
-            #     'MAGNITUDE_TYPE': combine_values_comma,
-            #     'FLOOD_CAUSE': combine_values_comma,
-            #     'CATEGORY': combine_values_comma,
-            #     'BEGIN_LOCATION': combine_values_comma,
-            #     'END_LOCATION': combine_values_comma,
-            #     'BEGIN_LAT': combine_values_comma,
-            #     'BEGIN_LON': combine_values_comma,
-            #     'END_LAT': combine_values_comma,
-            #     'END_LON': combine_values_comma,
-            #     'EPISODE_NARRATIVE':check_combine_values_slash,
-            #     'EVENT_NARRATIVE':check_combine_values_slash
-            # }).reset_index()
-
-            # combined_df = combined_df.reindex(columns=['PAIR_ID','OVERLAPPING_EVENTS','EPISODE_ID','EVENT_ID', 'GEOID', 'STATE','STATE_FIPS',
-            #                                  'EVENT_TYPE','CZ_TYPE', 'CZ_FIPS', 'CZ_NAME', 'BEGIN_DATETIME', 'END_DATETIME', 'start_year', 'end_year',
-            #                                  'WFO', 'CZ_TIMEZONE',
-            #                                  'MULTI_INJURIES_DIRECT','INJURIES_DIRECT',
-            #                                  'MULTI_INJURIES_INDIRECT','INJURIES_INDIRECT',
-            #                                  'MULTI_DEATHS_DIRECT','DEATHS_DIRECT',
-            #                                  'MULTI_DEATHS_INDIRECT','DEATHS_INDIRECT',
-            #                                  'MULTI_DAMAGE_PROPERTY','DAMAGE_PROPERTY',
-            #                                  'MULTI_DAMAGE_CROPS','DAMAGE_CROPS',
-            #                                  'SOURCE','MAGNITUDE','MAGNITUDE_TYPE','FLOOD_CAUSE','CATEGORY','TOR_F_SCALE',
-            #                                  'TOR_LENGTH','TOR_WIDTH', 'TOR_OTHER_WFO','TOR_OTHER_CZ_STATE',
-            #                                  'TOR_OTHER_CZ_FIPS','TOR_OTHER_CZ_NAME','BEGIN_RANGE',
-            #                                  'BEGIN_AZIMUTH','BEGIN_LOCATION','END_RANGE','END_AZIMUTH',
-            #                                  'END_LOCATION','BEGIN_LAT','BEGIN_LON','END_LAT','END_LON','DATA_SOURCE','EPISODE_NARRATIVE', 'EVENT_NARRATIVE'])
-
-            #all_combined_pair_df = pd.concat([all_combined_pair_df,combined_df])
             all_combined_pair_df = pd.concat([all_combined_pair_df,all_pair_df])
-            dfmulti = pd.concat([dfmulti, all_pair_df])
+            MH = pd.concat([MH, all_pair_df])
 
-
-            # Print the combined DataFrame
-        # else:
-        #     No_Multihazard_County_df = pd.concat([No_Multihazard_County_df, pd.DataFrame({'STATE_FIPS': [state_fips], 'COUNTY_FIPS': [county_fips]})])
-        #     print(f'\n NO MULTI-HAZARD PAIRS FOR STATE:{state_fips} AND COUNTY: {county_fips} \n')
-
-    #save the multihazard df for each state as an individual file, these can then be combined afterwards
-    #this can be used to avoids having a df in memory with all multihazard events for the entire US, which could result in memory errors
-    #all_combined_pair_df.to_csv(fr'{Hazard_Eventset_Output_Path}/NCEI_Storm_Database_Multihazards_1996_2024_lag_{time_lag_int}_state_{state_fips}.csv.gz', compression='gzip', encoding='utf-8', index=True)
-
-
-# print(f"Pair ID Count: {pair_id_count}")
-# display(dfmulti)
-
-# save multidf, as a csv and/or parquet
-# dfmulti.to_csv(
-#     rf"{Hazard_Eventset_Output_Path}/dfmulti_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.csv.gz",
-#     compression="gzip",
-#     encoding="utf-8",
-#     index=False,
-# )
 
 
 # Load us county shapefile, used to complete spatial filtering, can implement via shapely.STRtree() 
@@ -731,17 +660,17 @@ us_county_polygons['GEOID'] = us_county_polygons['GEOID'].astype(str).str.zfill(
 print(f'US County Polygon CRS: {us_county_polygons.geometry.crs}')
 
 # Define dictionaries that will store county event info, in a 3x nested structure of year->state->county
-single_hazard_count_dict = {}
-single_hazard_event_dict = {}
+SH_count_dict = {}
+SH_event_dict = {}
 
-multihazard_count_dict = {}
-multihazard_event_dict = {}
+MH_count_dict = {}
+MH_event_dict = {}
 
 no_hazard_boolean_dict = {}
-single_hazard_boolean_dict = {}
-multihazard_boolean_dict = {}
-no_hazard_or_single_hazard_boolean_dict = {}
-single_hazard_or_multihazard_boolean_dict = {}
+SH_boolean_dict = {}
+MH_boolean_dict = {}
+no_hazard_or_SH_boolean_dict = {}
+SH_or_MH_boolean_dict = {}
 
 # Define list of states to iterate through
 state_list = us_county_polygons['STATEFP'].unique().tolist() 
@@ -749,33 +678,33 @@ state_list = us_county_polygons['STATEFP'].unique().tolist()
 
 # Iterate through the previous defined start/end years
 for year in tqdm(year_range):
-    print(f'Year: {year}')
+    #print(f'Year: {year}')
     # Define nested structure of dictionaries
-    single_hazard_count_dict[year] = {}
-    multihazard_count_dict[year] = {}
-    single_hazard_event_dict[year] = {}
-    multihazard_event_dict[year] = {}
+    SH_count_dict[year] = {}
+    MH_count_dict[year] = {}
+    SH_event_dict[year] = {}
+    MH_event_dict[year] = {}
     no_hazard_boolean_dict[year] = {}
-    single_hazard_boolean_dict[year] = {}
-    multihazard_boolean_dict[year] = {}
-    no_hazard_or_single_hazard_boolean_dict[year] = {}
-    single_hazard_or_multihazard_boolean_dict[year] = {}
+    SH_boolean_dict[year] = {}
+    MH_boolean_dict[year] = {}
+    no_hazard_or_SH_boolean_dict[year] = {}
+    SH_or_MH_boolean_dict[year] = {}
     
-    dfsingle_sub = dfevents[(dfevents['start_year']==year) | (dfevents['end_year']==year)].reset_index(drop=True)
-    dfmulti_sub = dfmulti[(dfmulti['start_year']==year) | (dfmulti['end_year']==year)].reset_index(drop=True)
+    SH_sub = AE[(AE['start_year']==year) | (AE['end_year']==year)].reset_index(drop=True)
+    MH_sub = MH[(MH['start_year']==year) | (MH['end_year']==year)].reset_index(drop=True)
 
     for state in state_list:
         #print(f'State: {state}')
         # Define nested structure of dictionaries
-        single_hazard_count_dict[year][state] = {}
-        multihazard_count_dict[year][state] = {}
-        single_hazard_event_dict[year][state] = {}
-        multihazard_event_dict[year][state] = {}
+        SH_count_dict[year][state] = {}
+        MH_count_dict[year][state] = {}
+        SH_event_dict[year][state] = {}
+        MH_event_dict[year][state] = {}
         no_hazard_boolean_dict[year][state] = {}
-        single_hazard_boolean_dict[year][state] = {}
-        multihazard_boolean_dict[year][state] = {}
-        no_hazard_or_single_hazard_boolean_dict[year][state] = {}
-        single_hazard_or_multihazard_boolean_dict[year][state] = {}
+        SH_boolean_dict[year][state] = {}
+        MH_boolean_dict[year][state] = {}
+        no_hazard_or_SH_boolean_dict[year][state] = {}
+        SH_or_MH_boolean_dict[year][state] = {}
         
         county_state_list = us_county_polygons.loc[us_county_polygons['STATEFP'] == state, ['GEOID','COUNTYFP','geometry']]
 
@@ -787,107 +716,107 @@ for year in tqdm(year_range):
             ###############################################################
             # county_geom = us_county_polygons.loc[us_county_polygons['GEOID'] == str(county), 'geometry'].iloc[0]
             # #single spatial filter
-            # tree = shapely.STRtree(dfsingle_sub.Geometry.values) # Make tree too see Geometry overlap
+            # tree = shapely.STRtree(SH_sub.Geometry.values) # Make tree too see Geometry overlap
             # arr1 = np.transpose(tree.query(county_geom, predicate='intersects'))  # Find intersecting hazards with the area of interest
             # # crop hazard data to relevant regions 
-            # dfsingle_sub_county = dfsingle_sub.loc[np.sort(arr1)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
+            # SH_sub_county = SH_sub.loc[np.sort(arr1)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
             # # multi spatial filter
-            # tree2 = shapely.STRtree(dfmulti_sub.Geometry.values) # Make tree too see Geometry overlap
+            # tree2 = shapely.STRtree(MH_sub.Geometry.values) # Make tree too see Geometry overlap
             # arr2 = np.transpose(tree2.query(county_geom, predicate='intersects'))  # Find intersecting hazards with the area of interest
             # # crop hazard data to relevant regions 
-            # dfmulti_sub_county = dfmulti_sub.loc[np.sort(arr2)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
+            # MH_sub_county = MH_sub.loc[np.sort(arr2)].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
             ###############################################################
             
             # NON GEOMETRY SPATIAL FILTER APPROACH, FILTER VIA COUNTY GEOID
             ###############################################################
-            dfsingle_sub_county = dfsingle_sub[dfsingle_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
-            dfmulti_sub_county = dfmulti_sub[dfmulti_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
+            SH_sub_county = SH_sub[SH_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
+            MH_sub_county = MH_sub[MH_sub['GEOID']==county].reset_index(drop=True) # Remove the hazards that do not intersect with the area of interest	
             ###############################################################
 
             
             # Add single to dict
             # Check if there are matching single events in the multi event, this will be true if multi is true, then remove the multi events from the single before adding to dict
-            multi_events = set(dfmulti_sub_county['EVENT_ID'].unique())
-            single_events = set(dfsingle_sub_county['EVENT_ID'].unique())
+            multi_events = set(MH_sub_county['EVENT_ID'].unique())
+            single_events = set(SH_sub_county['EVENT_ID'].unique())
             single_only_events = single_events.symmetric_difference(multi_events) #find the 'code' ids of events in only single
             
             # Remove the single hazards that make up a valid multihazard for that location, so its single hazard only events
-            dfsingle_only_sub_county = dfsingle_sub_county[dfsingle_sub_county['EVENT_ID'].isin(single_only_events)]
+            SH_only_sub_county = SH_sub_county[SH_sub_county['EVENT_ID'].isin(single_only_events)]
             
             # If single hazard, add the count of unique single hazard events to the dict
             # Could alternatively use the 'id' as a unique field, I believe both 'code' and 'id' are unique for the single hazards
-            if len(dfsingle_only_sub_county)>0:
-                single_hazard_boolean_dict[year][state][county] = True
-                single_hazard_count_dict[year][state][county] = len(dfsingle_only_sub_county['EVENT_ID'].unique())
-                single_hazard_event_dict[year][state][county] = dfsingle_only_sub_county['EVENT_ID'].unique().tolist()
+            if len(SH_only_sub_county)>0:
+                SH_boolean_dict[year][state][county] = True
+                SH_count_dict[year][state][county] = len(SH_only_sub_county['EVENT_ID'].unique())
+                SH_event_dict[year][state][county] = SH_only_sub_county['EVENT_ID'].unique().tolist()
             else:
-                single_hazard_boolean_dict[year][state][county] = False
-                single_hazard_count_dict[year][state][county] = 0
-                single_hazard_event_dict[year][state][county] = []
+                SH_boolean_dict[year][state][county] = False
+                SH_count_dict[year][state][county] = 0
+                SH_event_dict[year][state][county] = []
 
             # Add multi to dict
-            multi_duplicated_events = dfmulti_sub_county["PAIR_ID"][dfmulti_sub_county["PAIR_ID"].duplicated(keep=False)]
-            multi_filtered_df = dfmulti_sub_county[dfmulti_sub_county["PAIR_ID"].isin(multi_duplicated_events)]    
+            multi_duplicated_events = MH_sub_county["PAIR_ID"][MH_sub_county["PAIR_ID"].duplicated(keep=False)]
+            multi_filtered_df = MH_sub_county[MH_sub_county["PAIR_ID"].isin(multi_duplicated_events)]    
             # If multihazard, add the count of unique multihazard events to dict
-            # If len(dfmulti_sub_county['code'].unique().tolist())>0:
+            # If len(MH_sub_county['code'].unique().tolist())>0:
             if len(multi_filtered_df)>0:
-                multihazard_boolean_dict[year][state][county] = True
-                multihazard_count_dict[year][state][county] = len(multi_filtered_df['PAIR_ID'].unique())
-                multihazard_event_dict[year][state][county] = multi_filtered_df['PAIR_ID'].unique().tolist()
+                MH_boolean_dict[year][state][county] = True
+                MH_count_dict[year][state][county] = len(multi_filtered_df['PAIR_ID'].unique())
+                MH_event_dict[year][state][county] = multi_filtered_df['PAIR_ID'].unique().tolist()
                 #OR could add the 'code' id of the single hazard events that make up a multihazard
-                #multihazard_event_dict[year][state][county] = {multi_filtered_df['code'].unique().tolist()}
+                #MH_event_dict[year][state][county] = {multi_filtered_df['code'].unique().tolist()}
             else:
-                multihazard_boolean_dict[year][state][county] = False
-                multihazard_count_dict[year][state][county] = 0
-                multihazard_event_dict[year][state][county] = []
+                MH_boolean_dict[year][state][county] = False
+                MH_count_dict[year][state][county] = 0
+                MH_event_dict[year][state][county] = []
             
             # Add no hazard to dict
-            if ((len(dfsingle_only_sub_county)==0) & (len(multi_filtered_df)==0)):
+            if ((len(SH_only_sub_county)==0) & (len(multi_filtered_df)==0)):
                 no_hazard_boolean_dict[year][state][county] = True
             else:
                 no_hazard_boolean_dict[year][state][county] = False
 
             # Add no single only hazard to dict, could remove the first two conditions,
-            if (((len(dfsingle_only_sub_county)==0) | (len(dfsingle_only_sub_county)>0)) & (len(multi_filtered_df)==0)):
-                no_hazard_or_single_hazard_boolean_dict[year][state][county] = True
+            if (((len(SH_only_sub_county)==0) | (len(SH_only_sub_county)>0)) & (len(multi_filtered_df)==0)):
+                no_hazard_or_SH_boolean_dict[year][state][county] = True
             else:
-                no_hazard_or_single_hazard_boolean_dict[year][state][county] = False
+                no_hazard_or_SH_boolean_dict[year][state][county] = False
 
             # Add single hazard or multi-hazard (i.e. inverse of no hazard) to dict
-            if ((len(dfsingle_only_sub_county)>0) | (len(multi_filtered_df)>0)):
-                single_hazard_or_multihazard_boolean_dict[year][state][county] = True
+            if ((len(SH_only_sub_county)>0) | (len(multi_filtered_df)>0)):
+                SH_or_MH_boolean_dict[year][state][county] = True
             else:
-                single_hazard_or_multihazard_boolean_dict[year][state][county] = False
+                SH_or_MH_boolean_dict[year][state][county] = False
 
 
 #Save final dictionaries as pickle
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_only_event_dict.pkl', 'wb') as file:
-    pickle.dump(single_hazard_event_dict, file)
+    pickle.dump(SH_event_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MH_event_dict.pkl', 'wb') as file:
-    pickle.dump(multihazard_event_dict, file)
+    pickle.dump(MH_event_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MH_count_dict.pkl', 'wb') as file:
-    pickle.dump(multihazard_count_dict, file)
+    pickle.dump(MH_count_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_count_dict.pkl', 'wb') as file:
-    pickle.dump(single_hazard_count_dict, file)
+    pickle.dump(SH_count_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_NH_boolean_dict.pkl', 'wb') as file:
     pickle.dump(no_hazard_boolean_dict, file)
     
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_boolean_dict.pkl', 'wb') as file:
-    pickle.dump(single_hazard_boolean_dict, file)
+    pickle.dump(SH_boolean_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_MH_boolean_dict.pkl', 'wb') as file:
-    pickle.dump(multihazard_boolean_dict, file)
+    pickle.dump(MH_boolean_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_NH_boolean_dict.pkl', 'wb') as file:
-    pickle.dump(no_hazard_or_single_hazard_boolean_dict, file)
+    pickle.dump(no_hazard_or_SH_boolean_dict, file)
 
 with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_MH_boolean_dict.pkl', 'wb') as file:
-    pickle.dump(single_hazard_or_multihazard_boolean_dict, file)
+    pickle.dump(SH_or_MH_boolean_dict, file)
 
 print("All hazard dicts saved as pickle")
 
@@ -905,22 +834,49 @@ def get_values(data):
 
 # # Load single-only hazard event dict
 # with open(Hazard_Dict_Output_Path+f'\\NCEI_County_SH_only_event_dict_{start_year}-{end_year}.pkl', 'rb') as file:
-#     single_hazard_event_dict = pickle.load(file)
+#     SH_event_dict = pickle.load(file)
 
 # Subset single hazard events to single-only hazard (single hazards that do not make up a multi-hazard pair)
-single_only_hazard_events = get_values(single_hazard_event_dict)
-dfsingle = dfevents[dfevents['EVENT_ID'].isin(single_only_hazard_events)]
+single_only_hazard_events = get_values(SH_event_dict)
+SH = AE[AE['EVENT_ID'].isin(single_only_hazard_events)].reset_index(drop=True)
 
-dfsingle.to_parquet(
-    rf"{Hazard_Eventset_Output_Path}/dfsingle_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
+SH.to_parquet(
+    rf"{Hazard_Eventset_Output_Path}/SH_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
     compression="gzip",
 )
 
-dfmulti.to_parquet(
-    rf"{Hazard_Eventset_Output_Path}/dfmulti_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
+MH = MH.reset_index(drop=True)
+
+MH.to_parquet(
+    rf"{Hazard_Eventset_Output_Path}/MH_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
     compression="gzip",
 )
 
-print(f'Total Number of Hazard Events: {len(dfevents)}')
-print(f'Number of Single Hazard Only Events:{len(dfsingle)}')
-print(f'Number of Multi-Hazard Events:{int(len(dfmulti)/2)}')
+MH_unique = MH.drop_duplicates(subset='EVENT_ID', keep='first', ignore_index=True, inplace=False).reset_index(drop=True)
+
+MH_unique.to_parquet(
+    rf"{Hazard_Eventset_Output_Path}/MH_unique_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.parquet.gz",
+    compression="gzip",
+)
+
+event_set_count_outputs = [
+    f"Total Number of Hazard Events: {len(AE)}",
+    f"Number of Single-Hazard Only Events (SH): {len(SH)}",
+    f"Number of Multi-Hazard Pairs (MHP): {int(len(MH)/2)}",
+    f"Number of Unique Multi-Hazard Events (MH): {len(MH_unique)}",
+]
+
+event_set_count_output_txt_path = rf"{Hazard_Eventset_Output_Path}/eventset_counts_{inj}inj_{dth}dth_{c}c_{p}p_lag{time_lag_int}_{start_year}-{end_year}.txt"
+
+with open(event_set_count_output_txt_path, "w", encoding="utf-8") as fp:
+    for line in event_set_count_outputs:
+        fp.write(line + "\n")
+
+print(f"Counts saved to: {event_set_count_output_txt_path}")
+
+
+print(f'Total Number of Hazard Events (AE): {len(AE)}')
+print(f'Number of Single-Hazard Only Events (SH):{len(SH)}')
+print(f'Number of Multi-Hazard Pairs (MHP):{int(len(MH)/2)}')
+print(f'Number of Unique Multi-Hazard Events (MH):{len(MH.drop_duplicates(subset='EVENT_ID'))}')
+
