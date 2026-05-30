@@ -11,6 +11,7 @@ Green, J. (2025) NCEI Storm Multihazard Eventset.
 This module processes and cleans storm event data from NOAA NCEI's Storm Events Database, applying 
 data quality checks, standardization rules, timezone conversions,  inflation adjustments, and more.
 
+Note that the current implementation is designed to create databases from 1950 to 2024.
 ###########################################################################
 
 # External input files - The example input files are configured to create the dataset up until 2024.
@@ -863,19 +864,22 @@ def clean_ncei_storm_database(input_dir, output_dir, cpi_lookup_source, nws_zone
 
 if __name__ == "__main__":
     # User-defined directories and data sources
-    INPUT_DIR = r"C:\path\to\input\directory"  # Replace with actual path
-    OUTPUT_DIR = r"C:\path\to\output\directory"  # Replace with actual path
+    INPUT_DIR = r'C:\path\to\input\directory'  # Replace with actual path
+    OUTPUT_DIR = r'C:\path\to\output\directory'  # Replace with actual path
     
     # Lookup table sources (filepath or URL) - REQUIRED
-    CPI_LOOKUP_SOURCE = r"C:\path\to\US_BLS_CPI_Inflation_1950-2024.txt"  # Replace with actual path or URL
-    NWS_ZONE_LOOKUP_SOURCE = r"C:\path\to\NWS_Zone_to_County_FIPS.csv"  # Replace with actual path or URL
+    CPI_LOOKUP_SOURCE = r'https://raw.githubusercontent.com/jagreen1/MultiHazard_NCEI_Storm_Eventset_Tools/refs/heads/main/US_BLS_CPI_Inflation_1950-2024.txt'  # Replace with actual path or URL
+    NWS_ZONE_LOOKUP_SOURCE = r'https://raw.githubusercontent.com/jagreen1/MultiHazard_NCEI_Storm_Eventset_Tools/refs/heads/main/NWS_Zone_to_County_FIPS_bp18mr25.dbx.txt.csv'  # Replace with actual path or URL
     
+    #CPI_LOOKUP_SOURCE = r'C:\path\to\US_BLS_CPI_Inflation_1950-2024.txt'  # Replace with actual path or URL
+    #NWS_ZONE_LOOKUP_SOURCE = r'C:\path\to\NWS_Zone_to_County_FIPS.csv'  # Replace with actual path or URL
+
     INFLATION_YEAR = 2024
     
     # STEP 1 (Optional): Download NCEI storm data
     # Uncomment one of the following lines to download data before processing
-    # download_ncei_storm_data(INPUT_DIR, method='http')  # Download via HTTP
     # download_ncei_storm_data(INPUT_DIR, method='ftp')   # Download via FTP
+    # download_ncei_storm_data(INPUT_DIR, method='http')  # Download via HTTP
     
     # STEP 2: Clean and process the data
     df_full, df_1996 = clean_ncei_storm_database(
