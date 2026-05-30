@@ -434,12 +434,33 @@ def load_storm_data(input_dir, pattern="*details*.csv.gz"):
     return pd.concat(dataframes, ignore_index=True)
 
 
-def load_remote_data(url, delimiter=','):
-    """Load reference data from remote GitHub repository."""
+def load_lookup_data(source, delimiter=','):
+    """
+    Load reference data from either a local file or remote URL.
+    
+    Parameters
+    ----------
+    source : str
+        Either a file path or URL to load data from
+    delimiter : str, optional
+        Delimiter used in CSV file (default: ',')
+    
+    Returns
+    -------
+    pd.DataFrame
+        Loaded data
+    """
     try:
-        return pd.read_csv(url, delimiter=delimiter)
+        if source.startswith(('http://', 'https://', 'ftp://')):
+            # Load from URL
+            return pd.read_csv(source, delimiter=delimiter)
+        else:
+            # Load from local file
+            if not os.path.exists(source):
+                raise FileNotFoundError(f"Lookup file not found: {source}")
+            return pd.read_csv(source, delimiter=delimiter)
     except Exception as e:
-        raise ConnectionError(f"Failed to load data from {url}: {str(e)}")
+        raise ValueError(f"Failed to load data from {source}: {str(e)}")
 
 
 def filter_required_fields(df):
@@ -661,7 +682,8 @@ def compute_location_completeness(df):
 # MAIN PROCESSING FUNCTION
 # ============================================================================
 
-def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024):
+def clean_ncei_storm_database(input_dir, output_dir, cpi_lookup_source, nws_zone_lookup_source,
+                              inflation_target_year=2024):
     """
     Process and clean NCEI Storm Events Database.
     
@@ -671,8 +693,20 @@ def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024)
         Directory containing raw compressed storm event CSV files. 
         Created if it doesn't exist.
     output_dir : str
-        Directory for saving cleaned parquet output files
-    inflation_target_year : int
+        Directory for saving cleaned parquet output files. 
+        Created if it doesn't exist.
+    cpi_lookup_source : str
+        Path to local CSV file or URL containing annual CPI inflation data.
+        Expected columns: 'Year', 'Annual'
+        Examples:
+        - 'C:/data/US_BLS_CPI_Inflation_1950-2024.txt'
+        - 'https://raw.githubusercontent.com/.../US_BLS_CPI_Inflation_1950-2024.txt'
+    nws_zone_lookup_source : str
+        Path to local CSV file or URL for NWS zone to county FIPS conversion.
+        Examples:
+        - 'C:/data/NWS_Zone_to_County_FIPS.csv'
+        - 'https://raw.githubusercontent.com/.../NWS_Zone_to_County_FIPS.csv'
+    inflation_target_year : int, optional
         Year to normalize damage values to (default: 2024)
     
     Returns
@@ -682,9 +716,21 @@ def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024)
     
     Examples
     --------
+    >>> # Using local files
     >>> df_full, df_1996 = clean_ncei_storm_database(
     ...     input_dir='C:/data/input',
     ...     output_dir='C:/data/output',
+    ...     cpi_lookup_source='C:/data/US_BLS_CPI_Inflation_1950-2024.txt',
+    ...     nws_zone_lookup_source='C:/data/NWS_Zone_to_County_FIPS.csv',
+    ...     inflation_target_year=2024
+    ... )
+    
+    >>> # Using remote URLs
+    >>> df_full, df_1996 = clean_ncei_storm_database(
+    ...     input_dir='C:/data/input',
+    ...     output_dir='C:/data/output',
+    ...     cpi_lookup_source='https://raw.githubusercontent.com/jagreen1/NCEI_Storm_Multihazard_Eventset/main/US_BLS_CPI_Inflation_1950-2024.txt',
+    ...     nws_zone_lookup_source='https://raw.githubusercontent.com/jagreen1/NCEI_Storm_Multihazard_Eventset/main/NWS_Zone_to_County_FIPS.csv',
     ...     inflation_target_year=2024
     ... )
     """
@@ -695,18 +741,14 @@ def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024)
     os.makedirs(input_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
     
-    # Load remote reference data
-    print("Loading reference data...")
-    nws_to_fips_df = load_remote_data(
-        'https://raw.githubusercontent.com/jagreen1/NCEI_Storm_Multihazard_Eventset/'
-        'refs/heads/main/NWS_Zone_to_County_FIPS_bp18mr25.dbx.txt.csv'
-    )
-    cpi_df = load_remote_data(
-        'https://raw.githubusercontent.com/jagreen1/NCEI_Storm_Multihazard_Eventset/'
-        'refs/heads/main/US_BLS_CPI_Inflation_1950-2024.txt',
-        delimiter='\t'
-    )
+    # Load lookup reference data from file or URL
+    print("Loading lookup tables...")
+    print(f"  Loading CPI inflation data from: {cpi_lookup_source}")
+    cpi_df = load_lookup_data(cpi_lookup_source, delimiter='\t')
     cpi_lookup = cpi_df.set_index('Year')['Annual'].to_dict()
+    
+    print(f"  Loading NWS zone to county FIPS mapping from: {nws_zone_lookup_source}")
+    nws_to_fips_df = load_lookup_data(nws_zone_lookup_source, delimiter=',')
     
     # Load and process main dataset
     print("Loading storm event data...")
@@ -801,9 +843,14 @@ def clean_ncei_storm_database(input_dir, output_dir, inflation_target_year=2024)
 # ============================================================================
 
 if __name__ == "__main__":
-    # User-defined directories and parameters
+    # User-defined directories and data sources
     INPUT_DIR = r"C:\path\to\input\directory"  # Replace with actual path
     OUTPUT_DIR = r"C:\path\to\output\directory"  # Replace with actual path
+    
+    # Lookup table sources (filepath or URL) - REQUIRED
+    CPI_LOOKUP_SOURCE = r"C:\path\to\US_BLS_CPI_Inflation_1950-2024.txt"  # Replace with actual path or URL
+    NWS_ZONE_LOOKUP_SOURCE = r"C:\path\to\NWS_Zone_to_County_FIPS.csv"  # Replace with actual path or URL
+    
     INFLATION_YEAR = 2024
     
     # STEP 1 (Optional): Download NCEI storm data
@@ -812,4 +859,10 @@ if __name__ == "__main__":
     # download_ncei_storm_data(INPUT_DIR, method='ftp')   # Download via FTP
     
     # STEP 2: Clean and process the data
-    df_full, df_1996 = clean_ncei_storm_database(INPUT_DIR, OUTPUT_DIR, INFLATION_YEAR)
+    df_full, df_1996 = clean_ncei_storm_database(
+        input_dir=INPUT_DIR,
+        output_dir=OUTPUT_DIR,
+        cpi_lookup_source=CPI_LOOKUP_SOURCE,
+        nws_zone_lookup_source=NWS_ZONE_LOOKUP_SOURCE,
+        inflation_target_year=INFLATION_YEAR
+    )
