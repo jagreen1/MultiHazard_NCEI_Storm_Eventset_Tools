@@ -1,18 +1,37 @@
 """
+###########################################################################
 NCEI Storm Multihazard Eventset Data Cleaning Pipeline
 
-Created March 21st, 2025
+Created 2025
 @author: Joshua Green - University of Southampton
 
 Please cite this script/dataset if used in any publications:
 Green, J. (2025) NCEI Storm Multihazard Eventset.
 
-This module processes and standardizes storm event data from NOAA NCEI's Storm Events Database,
-applying data quality checks, standardization rules, timezone conversions, and inflation adjustments.
+This module processes and cleans storm event data from NOAA NCEI's Storm Events Database, applying 
+data quality checks, standardization rules, timezone conversions,  inflation adjustments, and more.
 
-Input data can be downloaded from:
+###########################################################################
+
+# External input files - The example input files are configured to create the dataset up until 2024.
+# For later years, users will have to download updated input files.
+
+Access the most recent csv file for the NCEI Storm Database via HTTP or FTP. Use the download function to automatically extract the files to a defined directory.
+- Requires 'details' files (i.e., StormEvents_details-ftp_v1.0), not the 'locations' or 'fatalities' files
 - http://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
 - ftp://ftp.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
+
+Access the most recent txt file for the conversion between NWS-Forecast-Zone and CB-County-FIPS. Define the filepath when running the main function.
+- https://www.weather.gov/gis/ZoneCounty
+
+Access the most recent txt file for BLS CPI (urban consumers) inflation conversion. Define the filepath and target year of inflation when running the main function.
+- CUUR0000SA0 - All items in U.S. city average, all urban consumers, not seasonally adjusted
+- The input file must contain annual CPI averages, and must be formatted in the same manner as the example txt file.
+- https://data.bls.gov/timeseries/CUUR0000SA0
+- https://download.bls.gov/pub/time.series/cu/cu.data.1.AllItems
+- https://download.bls.gov/pub/time.series/cu/cu.txt
+
+###########################################################################
 """
 
 from datetime import datetime
