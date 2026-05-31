@@ -4,8 +4,8 @@ Published 2026
 @author: Joshua Green - University of Southampton
 
 Please cite the datasets and preprocessing script if used in any publications:
-Green, J. (2025) NCEI Storm Multihazard Eventset. [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.20285674.
-Green, J. (2025) MultiHazard_NCEI_Storm_Eventset_Tools. Github. https://github.com/jagreen1/MultiHazard_NCEI_Storm_Eventset_Tools.
+Green, J. (2026) NCEI Storm Multihazard Eventset. [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.20285674.
+Green, J. (2026) MultiHazard_NCEI_Storm_Eventset_Tools. Github. https://github.com/jagreen1/MultiHazard_NCEI_Storm_Eventset_Tools.
 
 This module processes and cleans storm event data from NOAA NCEI's Storm Events Database, applying 
 data quality checks, standardization rules, timezone conversions,  inflation adjustments, and more.
