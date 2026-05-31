@@ -1,5 +1,5 @@
 # NCEI_Storm_Multihazard_Eventset
-This repository contains scripts that allows the user to bulk download and clean the NOAA NCEI's Storm Events Database, and then generate single-hazard and multi-hazard eventset. Eventsets can be customized by defining time period (years), the multi-hazard timelag overlap (days), the hazard/peril event types (see database documentation), and various event impact threshold filters (deaths, injuries, crop damage, building damage).
+This repository contains Python scripts that allows the user to bulk download and clean the NOAA NCEI's Storm Events Database, and then generate single-hazard and multi-hazard eventset. Eventsets can be customized by defining time period (years), the multi-hazard timelag overlap (days), the hazard/peril event types (see database documentation), and various event impact threshold filters (deaths, injuries, crop damage, building damage).
 
 The download and cleaning capabilities can access the most up to date files from NOAA NCEI. However, the multi-hazard event set generation script is currently only designed to create event sets up until 2024, and will encounter errors if containing events ater 2024. Future work will modify the event set generation script to automatically limit input parameters to only allow years included in the user provided data.
 
