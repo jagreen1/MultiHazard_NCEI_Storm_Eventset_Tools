@@ -1,11 +1,11 @@
-#######################
+###########################################################################
 """
-Created 2025
+Published 2026
 @author: Joshua Green - University of Southampton
 
-Please cite this script/dataset if used in any publications:
-
-Green, J. (2025) NCEI Storm Multihazard Eventset.
+Please cite the datasets and preprocessing script if used in any publications:
+Green, J. (2025) NCEI Storm Multihazard Eventset. [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.20285674.
+Green, J. (2025) MultiHazard_NCEI_Storm_Eventset_Tools. Github. https://github.com/jagreen1/MultiHazard_NCEI_Storm_Eventset_Tools.
 
 This script uses the cleaned NCEI Storm Database to create four output event sets:
 - (AE) All Hazard Events
@@ -64,7 +64,7 @@ List of possible hazard types and acronyms
 "ws": "Winter Storm"
 "ww": "Winter Weather"
 """
-#######################
+###########################################################################
 
 import os
 import pandas as pd
