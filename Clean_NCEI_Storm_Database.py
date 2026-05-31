@@ -1,17 +1,16 @@
-"""
 ###########################################################################
-NCEI Storm Multihazard Eventset Data Cleaning Pipeline
-
-Created 2025
+"""
+Published 2026
 @author: Joshua Green - University of Southampton
 
-Please cite this script/dataset if used in any publications:
-Green, J. (2025) NCEI Storm Multihazard Eventset.
+Please cite the datasets and preprocessing script if used in any publications:
+Green, J. (2025) NCEI Storm Multihazard Eventset. [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.20285674.
+Green, J. (2025) MultiHazard_NCEI_Storm_Eventset_Tools. Github. https://github.com/jagreen1/MultiHazard_NCEI_Storm_Eventset_Tools.
 
 This module processes and cleans storm event data from NOAA NCEI's Storm Events Database, applying 
 data quality checks, standardization rules, timezone conversions,  inflation adjustments, and more.
 
-Note that the current implementation is designed to create databases from 1950 to 2024.
+Note that the current implementation is only designed to create databases within the time period of 1950 to 2024.
 ###########################################################################
 
 # External input files - The example input files are configured to create the dataset up until 2024.
@@ -31,9 +30,8 @@ Access the most recent txt file for BLS CPI (urban consumers) inflation conversi
 - https://data.bls.gov/timeseries/CUUR0000SA0
 - https://download.bls.gov/pub/time.series/cu/cu.data.1.AllItems
 - https://download.bls.gov/pub/time.series/cu/cu.txt
-
-###########################################################################
 """
+###########################################################################
 
 from datetime import datetime
 import glob
